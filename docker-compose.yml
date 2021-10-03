@@ -35,7 +35,9 @@ services:
       - --entrypoints.metrics.address=:8082
       # Мониторинг и логи
       - --log
+      - --log.format=json
       - --accessLog
+      - --accessLog.format=json
       - --metrics.prometheus.entryPoint=metrics
       # Автоматическое получение сертификатов
       - --certificatesResolvers.letsEncrypt.acme.email=postmaster@${DOMAIN}
@@ -53,6 +55,27 @@ services:
       - traefik.http.services.traefik.loadbalancer.server.port=1111 # dummy значение
       - traefik.http.middlewares.traefik-auth.basicauth.users=${TF_USER}:${TF_PASS_HASH}
       - traefik.http.routers.traefik.middlewares=traefik-auth
+    logging:
+      driver: fluentd
+      options:
+        fluentd-address: localhost:24224
+        tag: traefik.log
+
+  fluentd:
+    image: grafana/fluent-plugin-loki:master
+    container_name: fluentd
+    restart: always
+    ports:
+      - 127.0.0.1:24224:24224
+      - 127.0.0.1:24224:24224/udp
+    command: fluentd -v -p /fluentd/plugins
+    environment:
+      LOKI_URL: http://loki:3100
+    volumes:
+      - ./fluentd/fluent.conf:/fluentd/etc/fluent.conf:ro
+    networks:
+      - default
+      - monitoring
 
 networks:
   proxy:
