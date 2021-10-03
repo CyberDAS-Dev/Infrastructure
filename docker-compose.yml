@@ -1,0 +1,62 @@
+version: "3.8"
+services:
+  traefik:
+    image: traefik:v2.5
+    container_name: traefik
+    restart: unless-stopped
+    depends_on:
+      - fluentd
+    ports:
+      - 80:80
+      - 443:443
+    expose:
+      - 8082
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik/acme.json:/acme.json
+    networks:
+      - default
+      - proxy
+      - monitoring
+    command:
+      # Дэшборд
+      - --api
+      # Настройка провайдера (докер)
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=proxy
+      - --providers.docker.defaultRule=Host(`{{ (split "-" .Name)._0 }}.${DOMAIN}`)
+      # Точки входа
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entryPoint.to=websecure
+      - --entrypoints.web.http.redirections.entryPoint.scheme=https
+      - --entrypoints.websecure.address=:443
+      - --entrypoints.websecure.http.tls.certResolver=letsEncrypt
+      - --entrypoints.metrics.address=:8082
+      # Мониторинг и логи
+      - --log
+      - --accessLog
+      - --metrics.prometheus.entryPoint=metrics
+      # Автоматическое получение сертификатов
+      - --certificatesResolvers.letsEncrypt.acme.email=postmaster@${DOMAIN}
+      - --certificatesResolvers.letsEncrypt.acme.storage=acme.json
+        # Когда в caServer ничего не указано, traefik пытается получить настоящий сертификат
+        # Поэтому, при наличии TRAEFIL_REAL_CERTS в окружении, значением caServer будет пустая строка
+      - --certificatesResolvers.letsEncrypt.acme.caServer=${TRAEFIK_REAL_CERTS-https://acme-staging-v02.api.letsencrypt.org/directory}
+      - --certificatesResolvers.letsEncrypt.acme.httpChallenge.entryPoint=web
+    labels:
+      # Защищенный доступ (HTTP Basic Auth) к дэшборду
+      - traefik.enable=true
+      - traefik.http.routers.traefik.entrypoints=websecure
+      - traefik.http.routers.traefik.rule=Host(`traefik.${DOMAIN}`)
+      - traefik.http.routers.traefik.service=api@internal
+      - traefik.http.services.traefik.loadbalancer.server.port=1111 # dummy значение
+      - traefik.http.middlewares.traefik-auth.basicauth.users=${TF_USER}:${TF_PASS_HASH}
+      - traefik.http.routers.traefik.middlewares=traefik-auth
+
+networks:
+  proxy:
+    name: proxy
+    external: ${PROXY_IS_EXTERNAL-false}
+  monitoring:
+    external: true
