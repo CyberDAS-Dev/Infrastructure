@@ -53,7 +53,7 @@ services:
       - traefik.http.routers.traefik.rule=Host(`traefik.${DOMAIN}`)
       - traefik.http.routers.traefik.service=api@internal
       - traefik.http.services.traefik.loadbalancer.server.port=1111 # dummy значение
-      - traefik.http.middlewares.traefik-auth.basicauth.users=${TF_USER}:${TF_PASS_HASH}
+      - traefik.http.middlewares.traefik-auth.basicauth.users=${TRAEFIK_USER}:${TRAEFIK_PASS_HASH}
       - traefik.http.routers.traefik.middlewares=traefik-auth
     logging:
       driver: fluentd
